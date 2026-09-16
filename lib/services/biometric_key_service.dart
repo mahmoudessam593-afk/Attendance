@@ -37,6 +37,13 @@ class BiometricKeyService {
     }
 
     if (publicKeyPem == null) {
+      // iOS keeps Keychain items across app uninstalls and SecItemAdd will
+      // not replace an existing entry, so creating over a stale alias leaves
+      // the old private key in place while handing back the new public half -
+      // the server then stores one key while the phone signs with another and
+      // every verification fails. Deleting first makes the create authoritative.
+      await _biometric.deleteKeys(keyAlias: alias);
+
       final result = await _biometric.createKeys(
         keyAlias: alias,
         keyFormat: KeyFormat.pem,

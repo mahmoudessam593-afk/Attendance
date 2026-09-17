@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -349,35 +350,43 @@ class _HomeScreenState extends State<HomeScreen> {
     final employeeId = await _authService.getEmployeeId();
     if (employeeId == null) return;
 
-    try {
-      // No-op if already set up (e.g. right after OTP) - a safety net for
-      // accounts that missed enrollment earlier (declined, no biometrics
-      // available at the time, etc).
-      await _biometricKeyService.ensureKeyRegistered(deviceId);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Biometric setup failed: ${e.toString()}')),
-        );
-      }
-      return;
-    }
+    // biometric_signature has no web implementation, and WebAuthn needs a
+    // hostname this deployment doesn't have, so the browser build submits
+    // without a signature. The server only accepts that for devices enrolled
+    // as web and records it as unverified - see
+    // ALLOW_WEB_ATTENDANCE_WITHOUT_BIOMETRIC in attendance.controller.ts.
+    ({String signature, String signedAt})? proof;
 
-    final ({String signature, String signedAt}) proof;
-    try {
-      proof = await _biometricKeyService.signAttendance(
-        deviceId: deviceId,
-        employeeId: employeeId,
-        siteId: _nearestSite!.id,
-        attendanceType: type,
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Biometric authentication failed')),
-        );
+    if (!kIsWeb) {
+      try {
+        // No-op if already set up (e.g. right after OTP) - a safety net for
+        // accounts that missed enrollment earlier (declined, no biometrics
+        // available at the time, etc).
+        await _biometricKeyService.ensureKeyRegistered(deviceId);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Biometric setup failed: ${e.toString()}')),
+          );
+        }
+        return;
       }
-      return;
+
+      try {
+        proof = await _biometricKeyService.signAttendance(
+          deviceId: deviceId,
+          employeeId: employeeId,
+          siteId: _nearestSite!.id,
+          attendanceType: type,
+        );
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Biometric authentication failed')),
+          );
+        }
+        return;
+      }
     }
 
     setState(() => _isSubmitting = true);
@@ -392,8 +401,8 @@ class _HomeScreenState extends State<HomeScreen> {
           'accuracy': _currentAccuracy ?? 0,
           'attendanceType': type,
           'deviceId': deviceId,
-          'signature': proof.signature,
-          'signedAt': proof.signedAt,
+          if (proof != null) 'signature': proof.signature,
+          'signedAt': proof?.signedAt ?? DateTime.now().toUtc().toIso8601String(),
         },
       );
 

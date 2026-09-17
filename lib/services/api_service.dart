@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiService {
@@ -10,7 +11,12 @@ class ApiService {
   // 443 to internal 8443, so no port number is needed here. Before a real
   // production release this should come from build configuration (e.g.
   // --dart-define), not be hardcoded.
-  static const String baseUrl = 'https://41.33.109.20/api';
+  //
+  // The web build is served by the same Nginx that proxies /api, so it uses
+  // a same-origin relative URL: an absolute cross-origin URL would need CORS
+  // and would break whenever the page is reached by a different host/port
+  // than the one hardcoded here.
+  static const String baseUrl = kIsWeb ? '/api' : 'https://41.33.109.20/api';
 
   /// The API's unauthenticated liveness endpoint, sitting outside the /api
   /// prefix - used by the splash screen to detect "server unreachable /

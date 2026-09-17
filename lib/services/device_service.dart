@@ -20,13 +20,19 @@ class DeviceService {
     return generated;
   }
 
+  /// kIsWeb has to be checked first: in a browser defaultTargetPlatform still
+  /// reports the underlying OS, so a browser on an Android phone would
+  /// otherwise register as a native Android device - and the server decides
+  /// whether biometric proof is required from exactly this value.
   String get platformName {
+    if (kIsWeb) return 'Web';
     if (defaultTargetPlatform == TargetPlatform.android) return 'Android';
     if (defaultTargetPlatform == TargetPlatform.iOS) return 'iOS';
     return 'Unknown';
   }
 
   Future<String> getDeviceName() async {
+    if (kIsWeb) return 'Browser';
     try {
       final deviceInfo = DeviceInfoPlugin();
       if (defaultTargetPlatform == TargetPlatform.android) {
